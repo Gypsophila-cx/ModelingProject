@@ -3,19 +3,21 @@ import numpy as np
 from tmp_1 import solve_3_1
 from tmp_1 import calc_b
 
-def calc_yaw(yaw):
+def calc_yaw(yaw): # 计算偏航角的变化量
     len_ = len(yaw)
     sum = 0
     for i in range(1, len_):
-        if np.abs(yaw[i] - yaw[i - 1]) > 300:
-            sum += 5
+        if np.abs(yaw[i] - yaw[i - 1]) > 300: 
+            # 由于偏航角是一个周期性变化的量，所以需要考虑跨越360度的情况，例如：359度到0度的变化量为1度，而不是359度，通过观察数据发现，变化量大于300度时，可以保证跨越了360度
+            sum += min(yaw[i], yaw[i - 1]) + 360 - max(yaw[i], yaw[i - 1])
         else:
             sum += np.abs(yaw[i] - yaw[i - 1])
-        return sum
+
+    return sum
     
 def decide_action(yaw, pitch, roll, altitude, actions):
     len_ = len(yaw)
-    acts = [0, 0, 0, 0, 0]
+    acts = [0, 0, 0, 0, 0] # 储存基本动作，分别为：平飞、上升、下降、转弯、翻滚，出现为1，否则为0
     
     # 统计区间内基本动作
     for a in actions:
@@ -81,8 +83,8 @@ def decide_action(yaw, pitch, roll, altitude, actions):
     
     return np.argmax(acts) + 13
 
-name = '51st vs 36th R2__1HZ.csv'
-file_name = 'D:\\Study\\Computing\\发射机与目标机判定\\data\\ques2_' + name
+name = '51st vs 36th R1__1HZ.csv'
+file_name = 'D:\\Study\\Computing\\发射机与目标机判定\\ques2_' + name
 origin_name = 'D:\\Study\\Computing\\发射机与目标机判定\\data\\' + name
 file = pd.read_csv(file_name)
 origin = pd.read_csv(origin_name)
@@ -103,13 +105,16 @@ for ids in list(file.columns.values):
     flag += 1
     if flag == 1:
         continue
-    data = file[ids].values
-    intervals = solve_3_1(data)
-    actions = []
+    data = file[ids].values # 指定飞机的基本动作序列，
+    # .values将DataFrame转换为ndarray，其中元素类型从object转换为int
+    intervals = solve_3_1(data) # 将基本动作序列划分为一串子序列，每一段子序列组成一个复杂动作
+    actions = [] # 保存研究区间内的动作序列
 
     for interval in intervals:
-        start, end = interval.split('-')
-        start, end = int(start), int(end)
+        start, end = interval.split('-') # interval的格式为'起始时刻-终止时刻'
+        start, end = int(start), int(end) # 将起始时刻和终止时刻转换为整数
+
+        # 通过判断区间内的基本动作序列，确定区间内的复杂动作
         action = decide_action(
             yaw=YAW[start:end+1],
             roll=ROLL[start:end+1],
@@ -118,14 +123,14 @@ for ids in list(file.columns.values):
             actions=data[start:end+1])
         
         for i in range(end - start + 1):
-            actions.append(action)
+            actions.append(action) # 将复杂动作序列添加到动作序列中
 
     df[ids] = '0'
     ff = origin[origin.Id == ids]
     start_time = ff.iloc[0, 1] - time_min
-    for i in range(df.shape[0] - len(actions) - start_time):
-        actions.append(-1)
-    df.loc[start_time:, ids] = actions
+
+    df.loc[start_time: start_time+len(actions)-1, name] = actions #! -1
+    df.loc[start_time+len(actions):, name] = -1
     
 tttmp = 'ques3_1_' + name
 df.to_csv(tttmp)
